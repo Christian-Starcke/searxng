@@ -45,6 +45,10 @@ SearXNG is a free internet metasearch engine that aggregates results from more t
 - **No Data Retention**: Search queries are not logged or stored
 - **Secret Key Management**: Secure session handling with customizable keys
 
+## Automatic updates
+
+The `Upstream image and template sync` workflow runs every six hours and on demand. It fast-forwards Railway template changes from `protemplate/searxng`, pins the newest dated official SearXNG Docker Hub tag in `Dockerfile`, and pushes only when something changed. Those commits trigger the connected Railway deployment while preserving the custom entrypoint and configuration. Divergent fork history stops the workflow rather than being overwritten.
+
 ## 🚀 How to Use This Template
 
 ### Option 1: One-Click Deployment (Recommended)

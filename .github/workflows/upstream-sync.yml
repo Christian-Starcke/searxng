@@ -1,0 +1,78 @@
+name: Upstream image and template sync
+
+on:
+  schedule:
+    - cron: "0 */6 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Fast-forward the Railway template
+        id: sync
+        run: |
+          set -euo pipefail
+          echo "before=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git remote add upstream https://github.com/protemplate/searxng.git || \
+            git remote set-url upstream https://github.com/protemplate/searxng.git
+          git fetch upstream main
+          if git merge-base --is-ancestor upstream/main HEAD; then
+            echo "Template already contains upstream/main"
+          elif git merge-base --is-ancestor HEAD upstream/main; then
+            git merge --ff-only upstream/main
+          else
+            echo "Fork and upstream have diverged; manual reconciliation required"
+            exit 1
+          fi
+
+      - name: Pin the latest official SearXNG image
+        run: |
+          python3 - <<'PY'
+          import json
+          import pathlib
+          import re
+          import urllib.request
+
+          url = "https://hub.docker.com/v2/repositories/searxng/searxng/tags?page_size=2"
+          with urllib.request.urlopen(url, timeout=30) as response:
+              tags = json.load(response)["results"]
+          latest = next(tag["name"] for tag in tags if tag["name"] != "latest")
+
+          path = pathlib.Path("Dockerfile")
+          current = path.read_text(encoding="utf-8")
+          updated = re.sub(
+              r"^FROM docker\.io/searxng/searxng:\S+$",
+              f"FROM docker.io/searxng/searxng:{latest}",
+              current,
+              flags=re.MULTILINE,
+          )
+          if updated == current:
+              print(f"Already using {latest}")
+          else:
+              path.write_text(updated, encoding="utf-8")
+              print(f"Pinned {latest}")
+          PY
+
+      - name: Commit and push updates
+        run: |
+          set -euo pipefail
+          if ! git diff --quiet; then
+            git add Dockerfile
+            git commit -m "chore: pin latest official SearXNG image"
+          fi
+          if [ "$(git rev-parse HEAD)" != "${{ steps.sync.outputs.before }}" ]; then
+            git push origin main
+          else
+            echo "No upstream changes"
+          fi
