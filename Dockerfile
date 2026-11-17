@@ -1,4 +1,4 @@
-FROM docker.io/searxng/searxng:2026.11.15-2d500cb6b
+FROM docker.io/searxng/searxng:2026.11.17-b99cf7496
 
 # Use the environment variables that Railway injects at build time (non-sensitive ones)
 ARG SEARXNG_BASE_URL
